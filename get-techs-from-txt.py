@@ -96,7 +96,7 @@ def getstockdata(file_in):
     new_data = pd.concat([datef, timef, prices,  volumes], axis=1)
     
     new_data['change'] = (new_data['close'].diff(periods=1)).fillna(0)
-    new_data['percent'] = (new_data['change']/new_data['close'])*100
+    data['percent'] = (data['change']/(data['close']-data['change']))*100
     
     return new_data
 
