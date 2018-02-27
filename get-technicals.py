@@ -93,7 +93,7 @@ for tick in ticks:
     smas_data, extended_data, start_point = getTechnicals(data['close'], smas)
     fileoutput = stock+'-'+tick+'.csv'
     data['change'] = (data['close'].diff(periods=1)).fillna(0)
-    data['percent'] = (data['change']/data['close'])*100
+    data['percent'] = (data['change']/(data['close']-data['change']))*100
     data = data[start_point:]
     data = data.reset_index(drop=True)
     data = data.round(3)
