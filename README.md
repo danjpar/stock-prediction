@@ -1,5 +1,5 @@
-stock-prediction
+working on a stock-prediction model,
 
-get-technicals modified from https://pythonprogramming.net/advanced-matplotlib-graphing-charting-tutorial/
+basic technicals functions from https://pythonprogramming.net/advanced-matplotlib-graphing-charting-tutorial/
 
-generates a csv file from an input csv, and 4 SMA periods. Includes RSI, MACD, and EMA
+get-techs-from-txt.py is for an input txt file like the ones found at http://kibot.com/
