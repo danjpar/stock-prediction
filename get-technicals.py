@@ -77,7 +77,7 @@ def printTA (data, smas, timeFrame):
         smas_data = pd.concat([smas_data, sma_df], axis=1)
     
     rsi = rsiFunc(closep)
-    emaslow, emafast, macd = computeMACD(closep, 26, 13)
+    emaslow, emafast, macd = computeMACD(closep)
     MACDema9 = ExpMovingAverage(macd, 9)
     
     start_point = longestSMA - 1
