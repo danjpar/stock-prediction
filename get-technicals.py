@@ -45,82 +45,55 @@ def ExpMovingAverage(values, window):
 
 
 def computeMACD(x, slow=26, fast=12):
-    """
-    compute the MACD (Moving Average Convergence/Divergence) using a fast and slow exponential moving avg'
-    return value is emaslow, emafast, macd which are len(x) arrays
-    """
     emaslow = ExpMovingAverage(x, slow)
     emafast = ExpMovingAverage(x, fast)
-    return emaslow, emafast, emafast - emaslow
+    return emafast - emaslow
 
-def printTA (data, smas, timeFrame):
-    closep = data['close']
-    openp = data['open']
-    highp = data['high']
-    lowp = data['low']
-    volp = data['volume']
-    newDate = data['date']
-    
+def getLongestSMA(smas):
     longestSMA = 0
-    smas_data = pd.DataFrame()
-        
-    for i in smas:
-        if i > longestSMA:
-            longestSMA = i
-        
-    for x in smas:
-        sma_data = movingaverage(closep, x)
-        if x != longestSMA:
-            sma_data = sma_data[longestSMA - x:]
-        sma_df = pd.DataFrame(sma_data)
-        sma_df.columns = ['SMA'+str(x)]
-        smas_data = pd.concat([smas_data, sma_df], axis=1)
-    
-    rsi = rsiFunc(closep)
-    emaslow, emafast, macd = computeMACD(closep)
-    MACDema9 = ExpMovingAverage(macd, 9)
-    
+    for sma in smas:
+        if sma > longestSMA:
+            longestSMA = sma
+    return longestSMA
+
+def getTechnicals(values, smas):
+    longestSMA = getLongestSMA(smas)
     start_point = longestSMA - 1
-    
-    MACDema9 = MACDema9[start_point:]
-    macd = macd[start_point:]
-    emafast = emafast[start_point:]
-    emaslow = emaslow[start_point:]
-    rsi = rsi[start_point:]
-    newDate = newDate[start_point:]
-    
-    new_closep = closep[start_point:]
-    new_openp = openp[start_point:]
-    new_highp = highp[start_point:]
-    new_lowp = lowp[start_point:]
-    new_volp = volp[start_point:]
-    
-    fileOutput = stock+'/'+stock+'-'+timeFrame+'.csv'
-    
-    extended_data = pd.DataFrame({'Date': newDate, 'Open': new_openp,
-                                  'Close': new_closep, 'High': new_highp,
-                                  'Low': new_lowp, 'Volume': new_volp,
-                                  'RSI': rsi, 'MACD': macd,
-                                  'MACD-EMA9': MACDema9}, columns=['Date', 'Open', 'Close', 'High', 'Low', 'Volume', 'RSI', 'MACD', 'MACD-EMA9'])
-    
-    extended_data = extended_data.reset_index(drop=True)
-    new_exData = pd.concat([extended_data, smas_data], axis=1)
-    new_exData.to_csv(fileOutput, index=False)
+    smas_data = pd.DataFrame()
+    for sma in smas:
+        sma_data = movingaverage(values, sma)
+        if sma != longestSMA:
+            sma_data = sma_data[longestSMA - sma:]
+        smas_data['SMA'+str(sma)] = sma_data
+        
+    macd = computeMACD(values)[start_point:]
+    macd_ema9 = ExpMovingAverage(macd, 9)
+    ema30 = ExpMovingAverage(values, 30)[start_point:]
+    rsi = rsiFunc(values)[start_point:]
+    extended_data = pd.DataFrame({'RSI': rsi, 'MACD': macd,'MACD-EMA9': macd_ema9, 'EMA30': ema30})
+    extended_data = extended_data.round(5)
+    smas_data = smas_data.round(3)
+    return smas_data, extended_data, start_point
 
-
-nowTime = int(time.time())
-startTime = str(nowTime - 5097600) # intraday data limited to 60 days for 15min timeframe
-endTime = str(nowTime)
+nowtime = int(time.time())
+starttime = str(nowtime - 5097600) # intraday data limited to 60 days for 15min timeframe
+endtime = str(nowtime)
 
 ticks = ['2m', '5m', '15m', '60m']
 smas = [10, 20, 50, 200]
 stock = 'SPY'
-for i in ticks:
-    urlToVisit = 'https://query2.finance.yahoo.com/v8/finance/chart/'+stock+'?symbol='+stock+'&period1='+startTime+'&period2='+endTime+'&interval='+i
-    req = requests.get(urlToVisit)
+for tick in ticks:
+    urltovisit = 'https://query2.finance.yahoo.com/v8/finance/chart/'+stock+'?symbol='+stock+'&period1='+starttime+'&period2='+endtime+'&interval='+tick
+    req = requests.get(urltovisit)
     timestamps = pd.DataFrame.from_dict(req.json()['chart']['result'][0]['timestamp'])
     timestamps.columns = ['date']
-    new_data = pd.DataFrame.from_dict(req.json()['chart']['result'][0]['indicators']['quote'][0])
-    new_data = pd.concat([timestamps, new_data], axis=1)
-    new_data = new_data.dropna(axis=0, subset=['close'], how='any')
-    printTA(new_data, smas, i)
+    data = pd.DataFrame.from_dict(req.json()['chart']['result'][0]['indicators']['quote'][0])
+    data = pd.concat([timestamps, data], axis=1)
+    data = data.dropna(axis=0, subset=['close'], how='any')
+    smas_data, extended_data, start_point = getTechnicals(data['close'], smas)
+    fileoutput = stock+'-'+tick+'.csv'
+    data = data[start_point:]
+    data = data.reset_index(drop=True)
+    data = data.round(3)
+    new_exdata = pd.concat([data, extended_data, smas_data], axis=1)
+    new_exdata.to_csv(fileoutput, index=False)
