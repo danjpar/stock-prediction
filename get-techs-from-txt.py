@@ -52,7 +52,7 @@ def getLongestSMA(smas):
             longestSMA = i
     return longestSMA
 
-def gettechnicals(values, smas):
+def getTechnicals(values, smas):
     longestSMA = getLongestSMA(smas)
     start_point = longestSMA - 1
     smas_data = pd.DataFrame()
@@ -72,45 +72,95 @@ def gettechnicals(values, smas):
     smas_data = smas_data.round(3)
     return smas_data, extended_data, start_point
 
-def getstockdata(file_in):
-    f = open(file_in, 'r').read()
-    stockfile = []
+def getStockData(filename):
+    ''' file input as 7 columns separated by commas, rows as new lines '''
+    f = open(filename, 'r')
+    f = f.read()
     splitfile = f.split('\n')
-    
-    for eachline in splitfile:
-        splitline = eachline.split(',')
-        if len(splitline)==7:
-            stockfile.append(eachline)
+    stockfile = splitfile[:len(splitfile)-2]
     
     readfile = pd.DataFrame([sub.split(",") for sub in stockfile])
     readfile.columns = ['date', 'time', 'open', 'high', 'low', 'close', 'volume']
     
-    datef = pd.DataFrame(readfile['date'].str.split('/',2).tolist(), columns = ['month','day','year'])
+    datef = readfile['date']
+    timef = readfile['time']
+    
+    datef = pd.DataFrame(datef.str.split('/',2).tolist(), columns = ['month','day','year'])
     datef['year'] = datef['year'].str[2:]
     datef = datef.astype('uint8')
-    timef = pd.DataFrame(readfile['time'].str.split(':',1).tolist(), columns = ['hour','minute'])
+    timef = pd.DataFrame(timef.str.split(':',1).tolist(), columns = ['hour','minute'])
     timef = timef.astype('uint8')
     volumes = readfile['volume'].astype('uint32')
     prices = (readfile.drop(['date', 'time' ,'volume'], axis=1)).astype('float64')
     
-    new_data = pd.concat([datef, timef, prices,  volumes], axis=1)
+    data = pd.concat([datef, timef, prices,  volumes], axis=1)
     
-    new_data['change'] = (new_data['close'].diff(periods=1)).fillna(0)
-    new_data['percent'] = (new_data['change']/(new_data['close']-new_data['change']))*100
-    
-    return new_data
+    data = data.loc[data[(data['hour'] == 9) & (data['minute'] == 30)].index[0]:] # start on first opening minute.
+    year = data['year'] + 10
+    year[year > 100] = year - 100
+    data['year'] = year
+    #ah1 = data[((data.hour == 9) & (data.minute < 30)) | (data.hour < 9)]
+    #ah2 = data[((data.hour == 16) & (data.minute > 4)) | (data.hour > 16)]
+    nh = data[((data.hour == 16) & (data.minute <= 4)) | ((data.hour == 9) & (data.minute >= 30)) | ((data.hour > 9) & (data.hour < 16))]
+    return nh
 
-file_in = 'IBM_adjusted.txt'
-''' file input as 7 columns separated by commas, rows as new lines '''
-file_out = 'IBM/IBM-SMAS.csv'
-data = getstockdata(file_in)
-smas = [10, 20, 50, 200]
-smas_data, extended_data, start_point = gettechnicals(data['close'], smas)
-data = data[start_point:]
-data = data.reset_index(drop=True)
-data = data.round(3)
-year = data['year'] + 10
-year[year > 100] = year - 100
-data['year'] = year
-new_exdata = pd.concat([data, extended_data, smas_data], axis=1)
-#new_exdata.to_csv(file_out, index=False)
+def newTimeframe(nh, interval, tick):
+    if interval == 'minute':
+        start = 0
+        maxtick = 60-tick
+    if interval == 'hour':
+        start = 9
+        maxtick = start+8-tick
+
+    newdf = pd.DataFrame()
+    while start <= maxtick:
+        end = tick + start
+        if interval == 'minute':
+            nhtimeslices = nh[(nh['minute'] >= start)&(nh['minute'] < end)].groupby(['year', 'month', 'day', 'hour'], as_index=False)
+            newtimes = pd.DataFrame(nhtimeslices.minute.min())
+        if interval == 'hour':
+            nhtimeslices = nh[((nh['hour'] == start)&(nh['minute'] >= 30))|((nh['hour'] == end)&(nh['minute'] < 30))|((nh['hour'] > start)&(nh['hour'] < end))].groupby(['year', 'month', 'day'], as_index=False)
+            newtimes = pd.DataFrame(nhtimeslices.hour.min())
+        newlows = pd.DataFrame(nhtimeslices.low.min()).low
+        newhighs = pd.DataFrame(nhtimeslices.high.max()).high
+        newvols = pd.DataFrame(nhtimeslices.volume.sum()).volume
+        newopens = pd.DataFrame(nhtimeslices.open.first()).open
+        newcloses = pd.DataFrame(nhtimeslices.close.last()).close
+        newlows.name = 'low'
+        newhighs.name = 'high'
+        if interval == 'minute':
+            newtimes['minute'] = start
+        if interval == 'hour':
+            newtimes['minute'] = 30
+    
+        newnewdf = pd.concat([newtimes, newopens, newhighs, newlows, newcloses, newvols], axis=1)
+        newdf = pd.concat([newdf, newnewdf], axis=0)
+        start += tick
+    
+    if interval == 'hour':
+        newdf = newdf.set_index(['year', 'month', 'day', 'hour']).sort_index()
+        newdf = newdf.reset_index(level=['year', 'month', 'day', 'hour'])
+    if interval == 'minute':
+        newdf = newdf.set_index(['year', 'month', 'day', 'hour', 'minute']).sort_index()
+        newdf = newdf.reset_index(level=['year', 'month', 'day', 'hour', 'minute'])
+    
+    newdf['change'] = newdf['close'] - newdf['open']
+    newdf['percent'] = (newdf['change']/newdf['open'])*100
+    newdf = newdf.round(3)
+    smas = [10, 20, 50, 200]
+    smas_data, extended_data, start_point = getTechnicals(newdf['close'], smas)
+    newdf = newdf[start_point:]
+    newdf = newdf.reset_index(drop=True)
+    file_out = 'IBM/IBM_adj-'+str(tick)+interval+'-smas.csv'
+    new_exData = pd.concat([newdf, extended_data, smas_data], axis=1)
+    new_exData.to_csv(file_out, index=False)
+
+nh = getStockData('IBM_adjusted.txt')
+ticks = [1, 2, 4]
+for tick in ticks:
+    newTimeframe(nh, 'hour', tick)
+ticks = [5, 15, 30]
+for tick in ticks:
+    newTimeframe(nh, 'minute', tick)
+    
+    
