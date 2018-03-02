@@ -121,22 +121,22 @@ def newTimeframe(nh, interval, tick):
         end = tick + start
         if interval == 'minute':
             nhtimeslices = nh[(nh['minute'] >= start)&(nh['minute'] < end)].groupby(['year', 'month', 'day', 'hour'], as_index=False)
-            newtimes = pd.DataFrame(nhtimeslices.minute.min())
+            newtimes = nhtimeslices.minute.min()
             newtimes['minute'] = start
         if interval == 'hour':
             nhtimeslices = nh[((nh['hour'] == start)&(nh['minute'] >= 30))|((nh['hour'] == end)&(nh['minute'] < 30))|((nh['hour'] > start)&(nh['hour'] < end))].groupby(['year', 'month', 'day'], as_index=False)
-            newtimes = pd.DataFrame(nhtimeslices.hour.min())
+            newtimes = nhtimeslices.hour.min()
             newtimes['minute'] = 30
         if interval == 'day':
             nhtimeslices = nh.groupby(['year', 'month', 'day'], as_index=False)
-            newtimes = pd.DataFrame(nhtimeslices.hour.min())
+            newtimes = nhtimeslices.hour.min()
             newtimes = newtimes.drop(['hour'], axis=1)
         
-        newlows = pd.DataFrame(nhtimeslices.low.min()).low
-        newhighs = pd.DataFrame(nhtimeslices.high.max()).high
-        newvols = pd.DataFrame(nhtimeslices.volume.sum()).volume
-        newopens = pd.DataFrame(nhtimeslices.open.first()).open
-        newcloses = pd.DataFrame(nhtimeslices.close.last()).close
+        newlows = nhtimeslices.low.min().low
+        newhighs = nhtimeslices.high.max().high
+        newvols = nhtimeslices.volume.sum().volume
+        newopens = nhtimeslices.open.first().open
+        newcloses = nhtimeslices.close.last().close
         
         newnewdf = pd.concat([newtimes, newopens, newhighs, newlows, newcloses, newvols], axis=1)
         newdf = pd.concat([newdf, newnewdf], axis=0)
