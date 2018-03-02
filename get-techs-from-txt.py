@@ -105,8 +105,9 @@ def getStockData(filename):
     return nh
 
 def newTimeframe(nh, interval, tick):
+    start = 0
+    maxtick = 0
     if interval == 'minute':
-        start = 0
         maxtick = 60-tick
     if interval == 'hour':
         start = 9
@@ -121,6 +122,10 @@ def newTimeframe(nh, interval, tick):
         if interval == 'hour':
             nhtimeslices = nh[((nh['hour'] == start)&(nh['minute'] >= 30))|((nh['hour'] == end)&(nh['minute'] < 30))|((nh['hour'] > start)&(nh['hour'] < end))].groupby(['year', 'month', 'day'], as_index=False)
             newtimes = pd.DataFrame(nhtimeslices.hour.min())
+        if interval == 'day':
+            nhtimeslices = nh.groupby(['year', 'month', 'day'], as_index=False)
+            newtimes = pd.DataFrame(nhtimeslices.hour.min())
+        
         newlows = pd.DataFrame(nhtimeslices.low.min()).low
         newhighs = pd.DataFrame(nhtimeslices.high.max()).high
         newvols = pd.DataFrame(nhtimeslices.volume.sum()).volume
@@ -128,10 +133,13 @@ def newTimeframe(nh, interval, tick):
         newcloses = pd.DataFrame(nhtimeslices.close.last()).close
         newlows.name = 'low'
         newhighs.name = 'high'
+        
         if interval == 'minute':
             newtimes['minute'] = start
         if interval == 'hour':
             newtimes['minute'] = 30
+        if interval == 'day':
+            newtimes = newtimes.drop(['hour'], axis=1)
     
         newnewdf = pd.concat([newtimes, newopens, newhighs, newlows, newcloses, newvols], axis=1)
         newdf = pd.concat([newdf, newnewdf], axis=0)
@@ -143,7 +151,10 @@ def newTimeframe(nh, interval, tick):
     if interval == 'minute':
         newdf = newdf.set_index(['year', 'month', 'day', 'hour', 'minute']).sort_index()
         newdf = newdf.reset_index(level=['year', 'month', 'day', 'hour', 'minute'])
-    
+    if interval == 'day':
+        newdf = newdf.set_index(['year', 'month', 'day']).sort_index()
+        newdf = newdf.reset_index(level=['year', 'month', 'day'])
+
     newdf['change'] = newdf['close'] - newdf['open']
     newdf['percent'] = (newdf['change']/newdf['open'])*100
     newdf = newdf.round(3)
@@ -156,11 +167,10 @@ def newTimeframe(nh, interval, tick):
     new_exData.to_csv(file_out, index=False)
 
 nh = getStockData('IBM_adjusted.txt')
+newTimeframe(nh, 'day', 1) 
 ticks = [1, 2, 4]
 for tick in ticks:
     newTimeframe(nh, 'hour', tick)
 ticks = [5, 15, 30]
 for tick in ticks:
     newTimeframe(nh, 'minute', tick)
-    
-    
