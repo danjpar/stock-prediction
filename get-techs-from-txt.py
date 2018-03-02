@@ -107,11 +107,14 @@ def getStockData(filename):
 def newTimeframe(nh, interval, tick):
     start = 0
     maxtick = 0
+    timearray = ['year', 'month', 'day']
     if interval == 'minute':
         maxtick = 60-tick
+        timearray.extend(['hour', 'minute'])
     if interval == 'hour':
         start = 9
         maxtick = start+8-tick
+        timearray.extend(['hour'])
 
     newdf = pd.DataFrame()
     while start <= maxtick:
@@ -131,8 +134,6 @@ def newTimeframe(nh, interval, tick):
         newvols = pd.DataFrame(nhtimeslices.volume.sum()).volume
         newopens = pd.DataFrame(nhtimeslices.open.first()).open
         newcloses = pd.DataFrame(nhtimeslices.close.last()).close
-        newlows.name = 'low'
-        newhighs.name = 'high'
         
         if interval == 'minute':
             newtimes['minute'] = start
@@ -145,16 +146,9 @@ def newTimeframe(nh, interval, tick):
         newdf = pd.concat([newdf, newnewdf], axis=0)
         start += tick
     
-    if interval == 'hour':
-        newdf = newdf.set_index(['year', 'month', 'day', 'hour']).sort_index()
-        newdf = newdf.reset_index(level=['year', 'month', 'day', 'hour'])
-    if interval == 'minute':
-        newdf = newdf.set_index(['year', 'month', 'day', 'hour', 'minute']).sort_index()
-        newdf = newdf.reset_index(level=['year', 'month', 'day', 'hour', 'minute'])
-    if interval == 'day':
-        newdf = newdf.set_index(['year', 'month', 'day']).sort_index()
-        newdf = newdf.reset_index(level=['year', 'month', 'day'])
-
+    newdf = newdf.set_index(timearray).sort_index()
+    newdf = newdf.reset_index(level=timearray)
+    
     newdf['change'] = newdf['close'] - newdf['open']
     newdf['percent'] = (newdf['change']/newdf['open'])*100
     newdf = newdf.round(3)
